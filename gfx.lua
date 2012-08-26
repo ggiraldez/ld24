@@ -102,8 +102,11 @@ function gfx.init()
     gfx.load()
 
     print("Loading font")
-    local font = love.graphics.newFont("assets/victor-pixel.ttf", 14)
-    love.graphics.setFont(font)
+    gfx.fonts = {}
+    gfx.fonts.normal = love.graphics.newFont("assets/victor-pixel.ttf", 14)
+    gfx.fonts.big = love.graphics.newFont("assets/victor-pixel.ttf", 18)
+    gfx.fonts.huge = love.graphics.newFont("assets/victor-pixel.ttf", 24)
+    love.graphics.setFont(gfx.fonts.normal)
 end
 
 return gfx

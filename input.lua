@@ -13,31 +13,11 @@ function input.reset()
     input.left = false
     input.right = false
 
-    input.counts = { up = 0, down = 0 }
+    input.any = false
 end
 
 function input.keypressed(key, unicode)
-    if key == 'up' or key == 'down' then
-        input.counts[key] = input.counts[key] + 1
-    end
-end
-
-function input.consumeAll(key)
-    local count = input.counts[key]
-    if count > 0 then
-        input.counts[key] = 0
-    end
-    return count
-end
-
-function input.consumeOne(key)
-    local count = input.counts[key]
-    if count > 0 then
-        input.counts[key] = count - 1
-        return true
-    else
-        return false
-    end
+    input.any = true
 end
 
 input.reset()
