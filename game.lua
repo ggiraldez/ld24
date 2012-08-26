@@ -2,6 +2,8 @@ require('input')
 require('gfx')
 game = {}
 
+-- module variables
+--
 local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
 local screenSize = math.max(sw, sh)
 local farThreshold = 3 * screenSize
@@ -14,6 +16,14 @@ local quitting = false
 local paused = false
 
 local introTime = 10000
+local xp_penalty = 0.5
+local max_seg_level = 6
+local near_dist = screenSize / 2
+
+-- forward declarations
+--
+local critterEatSegment
+
 
 -- player = nil
 -- critters = {}
@@ -157,13 +167,14 @@ local function createItem(x, y, itype)
         angle=math.random()*2*math.pi,
         spin=(math.random()-0.5)*math.pi/50,
         v=math.random()*.2,
-        va=math.random()*2*math.pi
+        va=math.random()*2*math.pi,
+        hold=30
     }
 end
 
 local function createRandomItem(hidden)
     local itype
-    if math.random(10) > 4 then
+    if math.random(10) > 2 then
         itype = 'food'
     else
         itype = 'energy'
@@ -176,6 +187,9 @@ local function updateItem(it)
     it.angle = (it.angle + it.spin) % (2*math.pi)
     it.x = it.x + it.v * math.cos(it.va)
     it.y = it.y + it.v * math.sin(it.va)
+    if it.hold > 0 then
+        it.hold = it.hold - 1
+    end
 end
 
 local function consumeItem(critter, index)
@@ -191,6 +205,17 @@ local function consumeItem(critter, index)
     it.x = 1/0
     it.y = 1/0
     items[index] = createRandomItem(true)
+end
+
+local function consumeSegment(critter, index)
+    local seg = segments[index]
+    if seg.ttl > 0 then
+        critterEatSegment(critter, seg)
+    end
+    -- just to make sure the item is invalid if we cached it somewhere
+    seg.x = 1/0
+    seg.y = 1/0
+    seg.ttl = 0
 end
 
 
@@ -209,6 +234,7 @@ local function createCritter(x, y, stype)
 
         level = level,          -- overall level
         zone = 1,               -- zone the critter lives in
+        progress = 0,           -- progress to next level (must be equal or greater than level)
 
         max_v = 4,              -- maximum velocity
         friction = 0.02,        -- friction coefficient
@@ -227,6 +253,16 @@ local function createCritter(x, y, stype)
         
         size = 0,               -- total size (sum of all segments * 2)
         color = { 255, 255, 255 },
+
+        eaten = {               -- count of levels eaten of each type to figure out
+            life = 0,           -- what type will be the new segment
+            speed = 0,
+            attack = 0
+        },
+        nearby = {              -- nearby items (updated in checkItemsCollisions)
+            food = {},
+            energy = {}
+        },
 
         -- segments
         segs = {{ 
@@ -326,7 +362,7 @@ local function addSegment(c, stype)
 end
 
 local function updateSegments(c)
-    -- update segments
+    -- update segment positions
     local ss = c.segs
     
     -- first segment
@@ -355,14 +391,13 @@ local function updateSegments(c)
 end
 
 local function evolveSegment(c, num)
+    -- level up one segment
     if num < 1 or num > #(c.segs) then
-        print("invalid segment")
-        return
+        return false
     end
     local s = c.segs[num]
-    if s.level == 6 then
-        print("segment cannot evolve further")
-        return
+    if s.level == max_seg_level then
+        return false
     end
     s.level = s.level + 1
     if num == 1 then
@@ -374,6 +409,85 @@ local function evolveSegment(c, num)
     end
     c.level = c.level + 1
     updateSegments(c)
+    return true
+end
+
+local function nextSegmentType(c)
+    local stype = nil
+    local winning = 0
+    if c.eaten.life > winning then
+        winning = c.eaten.life
+        stype = 'life'
+    end
+    if c.eaten.speed > winning then
+        winning = c.eaten.speed
+        stype = 'speed'
+    end
+    if c.eaten.attack > winning then
+        winning = c.eaten.attack
+        stype = 'attack'
+    end
+    return stype
+end
+
+local function levelUpCritter(c)
+    local extra = c.progress - c.level
+    c.progress = extra
+
+    local num = nil
+    local ss = c.segs
+    for i = 1, #ss do
+        if ss[i].level < max_seg_level then
+            if i < #ss and ss[i+1].level == ss[i].level then
+                num = i
+                break
+            end
+        end
+    end
+
+    if num ~= nil then
+        -- evolve the num segment
+        evolveSegment(c, num)
+    else
+        local stype = nextSegmentType(c)
+        if not stype then
+            stype = segmentTypes[math.random(#segmentTypes)]
+        end
+        addSegment(c, stype)
+        -- add a segment
+        c.eaten.life = 0
+        c.eaten.speed = 0
+        c.eaten.attack = 0
+    end
+    local lp = c.life / c.max_life
+    local ep = c.energy / c.max_energy
+    updateStats(c)
+    c.life = lp * c.max_life
+    c.energy = ep * c.max_energy
+end
+
+critterEatSegment = function(c, segitem)
+    local stype = segitem.itype
+    local level = segitem.level
+
+    -- some life and energy is regained
+    if stype == 'life' then
+        c.life = c.life + level
+    elseif stype == 'speed' then
+        c.life = c.life + level/2
+        c.energy = c.energy + level/2
+    elseif stype == 'attack' then
+        c.energy = c.energy + level
+    end
+    c.life = math.min(c.life, c.max_life)
+    c.energy = math.min(c.energy, c.max_energy)
+
+    -- progress to level up
+    c.progress = c.progress + segitem.level * xp_penalty
+    c.eaten[stype] = c.eaten[stype] + level
+    if c.progress >= c.level then
+        levelUpCritter(c)
+    end
 end
 
 local function updateCritter(c)
@@ -438,13 +552,14 @@ end
 
 local function critterDied(c)
     -- spawn segments
-    print("Critter died")
     for i = 1, #(c.segs) do
-        local stype = c.segs[i].stype
-        local x = c.x + (math.random()-0.5) * 4
-        local y = c.y + (math.random()-0.5) * 4
+        local seg = c.segs[i]
+        local stype = seg.stype
+        local x = seg.x + (math.random()-0.5) * 4
+        local y = seg.y + (math.random()-0.5) * 4
         local s = createItem(x, y, stype)
         s.ttl = (math.random()*60+30)*60        -- decay 30-90 secs
+        s.hold = 30                             -- must wait 30 tics to consume
         s.level = c.segs[i].level
         table.insert(segments, s)
     end
@@ -456,6 +571,9 @@ local function damageCritter(target, damage, source)
 end
 
 local function checkCritterAttack(attacker, defender)
+    if defender.dead then
+        return false
+    end
     local ar = attacker.segs[1].size    -- head
     local dss = defender.segs
     local hit = false
@@ -465,9 +583,11 @@ local function checkCritterAttack(attacker, defender)
         local ds = dss[i]
         if distance(attacker, ds) < ar then
             hit = true
-            if ds.stype == 'attack' then
+            if ds.stype == 'attack' and i > 1 then
                 -- the attacker takes some damage
-                local thorns = ds.level
+                -- but not from the head, since that is calculated from the
+                -- defender when it computes attack damage
+                local thorns = ds.level + defender.level/2
                 damageCritter(attacker, thorns, defender)
             end
         end
@@ -482,38 +602,62 @@ local function checkCritterAttack(attacker, defender)
     return hit
 end
 
+local function checkItemsCollisions(c)
+    local d2
+    local head_size2 = c.segs[1].size * c.segs[1].size
+
+    -- check collisions against items
+    c.nearby.food = {}
+    c.nearby.energy = {}
+    for j = 1, #items do
+        local it = items[j]
+        d2 = distance2(c, it)
+        if d2 < head_size2 then
+            consumeItem(c, j)
+        elseif d2 < near_dist * near_dist then
+            table.insert(c.nearby[it.itype], it)
+        end
+    end
+    
+    -- check collisions against segment items
+    for j = 1, #segments do
+        local s = segments[j]
+        if s.hold <= 0 then
+            d2 = distance2(c, s)
+            if d2 < head_size2 then
+                consumeSegment(c, j)
+            end
+        end
+    end
+end
+
 local function checkCollisions(c)
-    local d
+    local d2
     local head_size2 = c.segs[1].size * c.segs[1].size
     
+    -- against the player and other critters
     if c.segs[1].stype == 'attack' and c.attack_cooldown <= 0 then
-        d = distance2(c, player)
-        if d < head_size2 then
+        d2 = distance2(c, player)
+        if d2 < head_size2 + player.size*player.size then
             -- attack player
+            checkCritterAttack(c, player)
         end
 
         if c.attack_cooldown <= 0 then
             for j = 1, #critters do
                 local cj = critters[j]
-                d = distance2(c, cj)
-                if d < head_size2 and c ~= cj then
-                    -- if successful, break for the cooldown
+                d2 = distance2(c, cj)
+                if d2 < head_size2 + cj.size*cj.size and c ~= cj then
+                    if checkCritterAttack(c, cj) then
+                        -- if successful, break for the cooldown
+                        break
+                    end
                 end
             end
         end
     end
     
-    for j = 1, #items do
-        d = distance2(c, items[j])
-        if d < head_size2 then
-        end
-    end
-    
-    for j = 1, #segments do
-        d = distance2(c, segments[j])
-        if d < head_size2 then
-        end
-    end
+    checkItemsCollisions(c)
 end
 
 
@@ -576,6 +720,7 @@ local function checkPlayerCollisions()
     local d2
     local head_size2 = player.segs[1].size * player.segs[1].size
 
+    -- against other critters
     if player.attack_cooldown <= 0 then
         for j = 1, #critters do
             local cj = critters[j]
@@ -589,18 +734,7 @@ local function checkPlayerCollisions()
         end
     end
     
-    for j = 1, #items do
-        d2 = distance2(player, items[j])
-        if d2 < head_size2 then
-            consumeItem(player, j)
-        end
-    end
-    
-    for j = 1, #segments do
-        d2 = distance2(player, segments[j])
-        if d2 < head_size2 then
-        end
-    end
+    checkItemsCollisions(player)
 end
 
 
@@ -653,16 +787,36 @@ local function aiCritter(c)
             local d = math.sqrt(c.x * c.x + c.y * c.y)
 
             c.a = 0.5
-            c.count = 10
+            c.count = math.random(5,15)     -- tics to apply acceleration
 
+            -- try to keep the critter in his zone
             local z = zones[c.zone]
-
             if d < z.inner then
                 c.aa = math.atan2(c.y, c.x) + (math.random()-0.5) * math.pi*3/4
             elseif d > z.outer then
                 c.aa = math.atan2(-c.y, -c.x) + (math.random()-0.5) * math.pi*3/4
             else
                 c.aa = math.random() * 2 * math.pi
+            end
+
+            -- basic instinct: if life is below 3/4, try to eat
+            if c.life / c.max_life < 0.75 then
+                local nearest = nil
+                local dist = 1/0
+                local candidates = c.nearby.food
+                for i = 1, #candidates do
+                    local food = candidates[i]
+                    local d2 = distance2(c, food)
+                    if d2 < dist then
+                        nearest = food
+                        dist = d2
+                    end
+                end
+                if nearest then
+                    local dx = nearest.x - c.x
+                    local dy = nearest.y - c.y
+                    c.aa = math.atan2(dy, dx)
+                end
             end
         end
     end
@@ -789,7 +943,6 @@ function game.update()
                 itemsCollected = itemsCollected + 1
             end
         end
-        print("Garbage collected "..itemsCollected.." items")
     end
     if globalTic % 60 == 29 then
         local crittersCollected = 0
@@ -800,7 +953,6 @@ function game.update()
                 crittersCollected = crittersCollected + 1
             end
         end
-        print("Garbage collected "..crittersCollected.." critters")
     end
 
     -- other critters processing
@@ -833,11 +985,12 @@ function game.update()
         for i = #deadSegments,1,-1 do
             table.remove(segments, deadSegments[i])
         end
-        print("Collected " .. #deadSegments .. " segments")
     end
 
     -- collisions
-    checkPlayerCollisions()
+    if not player.dead then
+        checkPlayerCollisions()
+    end
 
     -- divide the critters in batches to aleviate processing
     local modTic = globalTic % 7
@@ -848,7 +1001,7 @@ function game.update()
             -- if the critter is onscreen, we check every tic
             check = true
         end
-        if check then
+        if check and not c.dead then
             checkCollisions(c)
         end
     end
@@ -929,7 +1082,7 @@ local function renderCritter(c, micro_hud)
         love.graphics.setColor(255,255,255,128)
         love.graphics.rectangle('fill', x-1, y-1, 16, 4)
         love.graphics.setColor(255,0,0,160)
-        love.graphics.rectangle('fill', x, y, c.life/c.max_life*16, 2)
+        love.graphics.rectangle('fill', x, y, math.max(0,c.life/c.max_life)*16, 2)
     end
 end
 
@@ -964,7 +1117,7 @@ local function renderHUD()
         love.graphics.setColor(64,64,64,128)
         love.graphics.rectangle('fill', 1, 1, 200, 8)
         love.graphics.setColor(160,0,0,128)
-        love.graphics.rectangle('fill', 1, 1, (player.life/player.max_life*200), 8)
+        love.graphics.rectangle('fill', 1, 1, math.max(0, player.life/player.max_life*200), 8)
     love.graphics.pop()
 
     -- render energy
@@ -978,7 +1131,32 @@ local function renderHUD()
         love.graphics.setColor(64,64,64,128)
         love.graphics.rectangle('fill', 1, 1, 200, 8)
         love.graphics.setColor(0,0,160,128)
-        love.graphics.rectangle('fill', 1, 1, (player.energy/player.max_energy*200), 8)
+        love.graphics.rectangle('fill', 1, 1, math.max(0, player.energy/player.max_energy*200), 8)
+    love.graphics.pop()
+
+    -- level and progress to next level
+    love.graphics.push()
+        love.graphics.translate(sw/2, sh-18)
+        love.graphics.setColor(255,255,255,128)
+        s = ""..player.level
+        w = font:getWidth(s)
+        love.graphics.print(s, -110-w, -5)
+        love.graphics.setColor(64,64,64,128)
+        love.graphics.rectangle('fill', -100, 0, 200, 4)
+        love.graphics.setColor(255,192,0,192)
+        love.graphics.rectangle('fill', -100, 0, (player.progress/player.level*200), 4)
+
+        local stype = nextSegmentType(player)
+        if stype == 'life' then
+            love.graphics.setColor(200,0,0,192)
+        elseif stype == 'speed' then
+            love.graphics.setColor(0,200,0,192)
+        elseif stype == 'attack' then
+            love.graphics.setColor(0,0,200,192)
+        else
+            love.graphics.setColor(200,200,200,192)
+        end
+        love.graphics.rectangle('fill', 110, -1, 6, 6)
     love.graphics.pop()
 end
 
@@ -1079,7 +1257,13 @@ function game.render()
     local d = math.sqrt(player.x*player.x + player.y*player.y)
     local v = d/5000
     local c = math.max(0, 96 * (1-v))
-    love.graphics.setBackgroundColor(c,c,c)
+    if player.hurt_time > 0 then
+        local lp = 1-player.life/player.max_life
+        local r = math.min(255, c + (192*lp*player.hurt_time/30))
+        love.graphics.setBackgroundColor(r,c,c)
+    else
+        love.graphics.setBackgroundColor(c,c,c)
+    end
     love.graphics.clear()
 
     love.graphics.push()
@@ -1120,6 +1304,9 @@ function game.render()
         
         renderHUD()
         if player.dead then
+            if player.hurt_time > 0 then
+                player.hurt_time = player.hurt_time - 1
+            end
             renderDead()
         end
     end
