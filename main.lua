@@ -1,3 +1,4 @@
+require('utils')
 local game = require('game')
 local input = require('input')
 local ticsPerSec = 60
@@ -38,16 +39,19 @@ function love.keypressed(key, unicode)
     elseif key == "numlock" then
         debug.debug()
         love.timer.step()
+
     elseif key == "f11" then
         love.graphics.toggleFullscreen()
-    elseif key == "f5" then
-        game.reloadGfx()
+
     elseif key == "f2" then
         game.toggleDebug()
     elseif key == "f3" then
         game.restart()
+
     elseif key == "f4" then
         reloadCode()
+    elseif key == "f5" then
+        reloadGfx()
     else
         input.keypressed(key, unicode)
     end
@@ -66,6 +70,11 @@ end
 function reloadCode()
     package.loaded.game = nil
     game = require('game')
+end
+
+function reloadGfx()
+    package.loaded.gfx = nil
+    gfx = require('gfx')
 end
 
 
