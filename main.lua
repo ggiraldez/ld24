@@ -76,6 +76,7 @@ end
 function reloadGfx()
     package.loaded.gfx = nil
     gfx = require('gfx')
+    gfx.init()
 end
 
 

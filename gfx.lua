@@ -60,7 +60,46 @@ function gfx.load()
 
 end
 
-gfx.load()
+local function clearPixels(x, y, r, g, b, a)
+    return 0,0,0,0
+end
+
+local function createBackground(base, value, count)
+    local w, h = base:getWidth(), base:getHeight()
+    local data = love.image.newImageData(w, h)
+    data:paste(base, 0, 0, 0, 0, w, h)
+    for i = 1, count do
+        local x = math.random(w-2)
+        local y = math.random(h-2)
+        local v = math.max(0, math.min(255, math.random(value - 30, value + 30)))
+        data:setPixel(x, y, v, v, v, 255)
+        data:setPixel(x-1, y, v, v, v, 192)
+        data:setPixel(x+1, y, v, v, v, 192)
+        data:setPixel(x, y-1, v, v, v, 192)
+        data:setPixel(x, y+1, v, v, v, 192)
+    end
+    return love.graphics.newImage(data)
+end
+
+function gfx.createBackgrounds()
+    local base = love.image.newImageData(512, 512)
+    base:mapPixel(clearPixels)
+
+    gfx.bg = {}
+    gfx.bg.near = {}
+    gfx.bg.far = {}
+    for i = 1,9 do
+        table.insert(gfx.bg.near, createBackground(base, 225, 100))
+        table.insert(gfx.bg.far, createBackground(base, 128, 60))
+    end
+end
+
+function gfx.init()
+    print("Creating backgrounds")
+    gfx.createBackgrounds()
+    print("Loading textures")
+    gfx.load()
+end
 
 return gfx
 

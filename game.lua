@@ -9,6 +9,10 @@ local debug = true
 -- critters = {}
 -- items = {}
 
+--
+-- Constants
+--
+
 local segmentTypes = { 'life', 'speed', 'attack' }
 local segmentSizes = {
     head = {
@@ -30,6 +34,12 @@ local segmentSizes = {
 
 local itemTypes = { 'food', 'energy', 'life', 'speed', 'attack' }
 
+
+
+-- 
+-- Zones
+--
+
 local zones = {}
 
 local function computeZones()
@@ -47,7 +57,21 @@ local function computeZones()
         delta = delta * inc
     end
 end
+
+local function zoneFromDistance(d)
+    local zone = #zones
+    for z = 1,#zones do
+        if d < zones[z].outer and d > zones[z].inner then
+            zone = z
+            break
+        end
+    end
+    return zone
+end
+
 computeZones()
+
+
 
 --
 -- Critters code
@@ -355,6 +379,7 @@ end
 --
 
 function game.init()
+    gfx.init()
     game.restart()
 end
 
@@ -434,6 +459,30 @@ end
 --
 
 local function renderBackground()
+    love.graphics.setColor(255, 255, 255, 128)
+
+    local function tileBackground(ox, oy, tiles)
+        -- all backgrounds assumed to be the same dimensions
+        local bgw, bgh = tiles[1]:getWidth(), tiles[1]:getHeight()
+
+        local scol = math.floor((ox - sw/2) / bgw)
+        local ecol = math.ceil((ox + sw/2) / bgw)
+        local srow = math.floor((oy - sh/2) / bgh)
+        local erow = math.ceil((oy + sh/2) / bgh)
+
+        for row = srow, erow do
+            for col = scol, ecol do
+                local index = ((row + col) % #tiles) + 1
+                love.graphics.draw(tiles[index], col * bgw, row * bgh)
+            end
+        end
+    end
+    love.graphics.push()
+    love.graphics.translate(player.x/2, player.y/2)
+    tileBackground(player.x/2, player.y/2, gfx.bg.far)
+    love.graphics.pop()
+    tileBackground(player.x, player.y, gfx.bg.near)
+
     love.graphics.circle('line', 0, 0, 50)
 end
 
@@ -464,9 +513,10 @@ local function renderItems()
 end
 
 function game.render()
+    -- background color is a function of the distance of the player to the origin
     local d = math.sqrt(player.x*player.x + player.y*player.y)
     local v = d/5000
-    local c = math.max(0, 128 * (1-v))
+    local c = math.max(0, 96 * (1-v))
     love.graphics.setBackgroundColor(c,c,c)
     love.graphics.clear()
 
@@ -487,13 +537,7 @@ function game.render()
     love.graphics.pop()
 
     if debug then
-        local zone = 1
-        for z = 1,#zones do
-            if d < zones[z].outer and d > zones[z].inner then
-                zone = z
-                break
-            end
-        end
+        local zone = zoneFromDistance(d)
         love.graphics.print("d=" .. math.ceil(d) .. ", zone: " .. zone, sw-200,0)
     end
 end
