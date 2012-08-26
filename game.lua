@@ -410,6 +410,7 @@ local function critterDied(c)
         local y = c.y + (math.random()-0.5) * 4
         local s = createItem(x, y, stype)
         s.ttl = math.random(3)*60*60
+        s.level = c.segs[i].level
         table.insert(segments, s)
     end
 end
@@ -966,11 +967,11 @@ local function renderIntro()
     end
 
     local color1 = { 255,255,255,192 }
-    doText('EVOLUTION', 'huge', sh/4, color1, 0, 800)
-    doText('a game by Gustavo Giráldez', 'big', sh/4+30, color1, 0.75*fadeTime, 800)
+    doText('PINCERS', 'huge', sh/4, color1, 0, 800)
+    doText('made by Gustavo Giráldez', 'big', sh/4+30, color1, 0.75*fadeTime, 800)
 
     local color2 = { 255,255,255,128 }
-    doText('made for the Ludum Dare 24 compo', 'normal', sh/2+90, color2, 2*fadeTime, 800)
+    doText('for the Ludum Dare 24 compo', 'normal', sh/2+90, color2, 2*fadeTime, 800)
     doText('August 2012', 'normal', sh/2+110, color2, 2.75*fadeTime, 800)
 
     doText('use the mouse, arrow keys or WASD to guide your creature',

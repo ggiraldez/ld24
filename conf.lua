@@ -1,5 +1,5 @@
 function love.conf(t)
-    t.title = "LD24 - Evolution"
+    t.title = "Pincers"
     t.author = "Gustavo Giráldez"
 
     t.screen.width = 1024
