@@ -51,8 +51,13 @@ function gfx.load()
 
     gfx.quads['items'] = {
         food = love.graphics.newQuad(0, 0, 16, 16, iw, ih),
-        energy = love.graphics.newQuad(16, 0, 16, 16, iw, ih)
+        energy = love.graphics.newQuad(16, 0, 16, 16, iw, ih),
+        
+        life = love.graphics.newQuad(0, 16, 16, 16, iw, ih),
+        speed = love.graphics.newQuad(16, 16, 16, 16, iw, ih),
+        attack = love.graphics.newQuad(32, 16, 16, 16, iw, ih)
     }
+
 end
 
 gfx.load()

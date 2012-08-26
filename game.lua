@@ -28,7 +28,26 @@ local segmentSizes = {
     }
 }
 
-local itemTypes = { 'food', 'energy' }
+local itemTypes = { 'food', 'energy', 'life', 'speed', 'attack' }
+
+local zones = {}
+
+local function computeZones()
+    local inner = 0
+    local outer = 700
+    local delta = 500
+    local inc = 1.1
+    for lvl = 1,50 do
+        table.insert(zones, {
+            inner=inner,
+            outer=outer
+        })
+        inner = outer
+        outer = outer + delta
+        delta = delta * inc
+    end
+end
+computeZones()
 
 --
 -- Critters code
@@ -289,12 +308,14 @@ local function aiCritter(c)
             c.a = 0.5
             c.count = 10
 
-            if d < 1000 then
-                c.aa = math.random() * 2 * math.pi
-            elseif d < 3000 then
-                c.aa = math.atan2(-c.y, -c.x) + math.random() * math.pi - math.pi/2
+            local z = zones[c.level]
+
+            if d < z.inner then
+                c.aa = math.atan2(c.y, c.x) + (math.random()-0.5) * math.pi*3/4
+            elseif d > z.outer then
+                c.aa = math.atan2(-c.y, -c.x) + (math.random()-0.5) * math.pi*3/4
             else
-                c.aa = math.atan2(-c.y, -c.x)
+                c.aa = math.random() * 2 * math.pi
             end
         end
     end
@@ -347,17 +368,20 @@ function game.restart()
     
     -- populate critters
     critters = {}
-    for i = 1, 50 do
+    for i = 1, 100 do
         local c
         local stype = segmentTypes[math.random(#segmentTypes)]
-        local level = math.random(15)
+        local level = math.random(5)
         if stype == 'attack' then
             level = math.max(level, 2)
         end
                 
         -- FIXME: these should be calculated according to critter level
-        local x = (math.random()-0.5) * 1500
-        local y = (math.random()-0.5) * 1500
+        local z = zones[level]
+        local angle = math.random() * 2 * math.pi
+        local d = math.random(z.inner, z.outer)
+        local x = d * math.cos(angle)
+        local y = d * math.sin(angle)
         
         c = createCritter(x, y, stype)
         while level > 1 do
@@ -375,7 +399,7 @@ function game.restart()
     -- populate items
     items = {}
     for i = 1, 50 do
-        local it = itemTypes[math.random(#itemTypes)]
+        local it = itemTypes[math.random(2)]
         local x = (math.random()-0.5) * 2000
         local y = (math.random()-0.5) * 2000
         table.insert(items, createItem(x, y, it))
@@ -463,7 +487,14 @@ function game.render()
     love.graphics.pop()
 
     if debug then
-        love.graphics.print("d=" .. math.ceil(d), sw-100,0)
+        local zone = 1
+        for z = 1,#zones do
+            if d < zones[z].outer and d > zones[z].inner then
+                zone = z
+                break
+            end
+        end
+        love.graphics.print("d=" .. math.ceil(d) .. ", zone: " .. zone, sw-200,0)
     end
 end
 
