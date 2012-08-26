@@ -15,5 +15,6 @@ Press Escape to quit or restart the game. Press P to pause.
 
 The game is programmed in Lua using the Löve game framework. Graphics were
 drawn with the Gimp. The in-game font is Victor-Pixel grabbed from
-http://www.dafont.com/victors-pixel-font.font
+http://www.dafont.com/victors-pixel-font.font. Sound effects were created with
+sfxr from http://www.drpetter.se/project_sfxr.html.
 

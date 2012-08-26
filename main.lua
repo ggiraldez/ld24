@@ -53,6 +53,8 @@ function love.keypressed(key, unicode)
         reloadCode()
     elseif key == "f5" then
         reloadGfx()
+    elseif key == "f6" then
+        reloadSfx()
     else
         input.keypressed(key, unicode)
     end
@@ -73,6 +75,12 @@ function reloadGfx()
     package.loaded.gfx = nil
     gfx = require('gfx')
     gfx.init()
+end
+
+function reloadSfx()
+    package.loaded.sfx = nil
+    sfx = require('sfx')
+    sfx.init()
 end
 
 

@@ -1,5 +1,6 @@
 require('input')
 require('gfx')
+require('sfx')
 game = {}
 
 -- module variables
@@ -205,12 +206,18 @@ local function consumeItem(critter, index)
     it.x = 1/0
     it.y = 1/0
     items[index] = createRandomItem(true)
+    if critter == player then
+        sfx.play('pickup')
+    end
 end
 
 local function consumeSegment(critter, index)
     local seg = segments[index]
     if seg.ttl > 0 then
         critterEatSegment(critter, seg)
+        if critter == player then
+            sfx.play('pickup')
+        end
     end
     -- just to make sure the item is invalid if we cached it somewhere
     seg.x = 1/0
@@ -242,6 +249,7 @@ local function createCritter(x, y, stype)
         max_life = 10,          -- total life
         life = 0,               -- current life
         hurt_time = 0,          -- timer when the critter takes damage
+        last_attacker = nil,
         
         max_energy = 10,        -- total energy
         energy = 10,            -- current energy
@@ -448,6 +456,9 @@ local function levelUpCritter(c)
     if num ~= nil then
         -- evolve the num segment
         evolveSegment(c, num)
+        if c == player then
+            sfx.play('levelup')
+        end
     else
         local stype = nextSegmentType(c)
         if not stype then
@@ -458,12 +469,16 @@ local function levelUpCritter(c)
         c.eaten.life = 0
         c.eaten.speed = 0
         c.eaten.attack = 0
+        if c == player then
+            sfx.play('newseg')
+        end
     end
     local lp = c.life / c.max_life
     local ep = c.energy / c.max_energy
     updateStats(c)
     c.life = lp * c.max_life
     c.energy = ep * c.max_energy
+
 end
 
 critterEatSegment = function(c, segitem)
@@ -551,6 +566,16 @@ local function updateCritter(c)
 end
 
 local function critterDied(c)
+    if onScreen(c.x, c.y) then
+        if c == player then
+            sfx.play('death')
+        elseif c.last_attacker == player then
+            sfx.play('kill')
+        else
+            sfx.play('kill', true)
+        end
+    end
+
     -- spawn segments
     for i = 1, #(c.segs) do
         local seg = c.segs[i]
@@ -568,6 +593,18 @@ end
 local function damageCritter(target, damage, source)
     target.life = target.life - damage
     target.hurt_time = 30
+    target.last_attacker = source
+    if onScreen(target.x, target.y) then
+        if target == player then
+            sfx.play('hurt')
+        else
+            if source == player then
+                sfx.play('hit')
+            else
+                sfx.play('hit', true)
+            end
+        end
+    end
 end
 
 local function checkCritterAttack(attacker, defender)
@@ -836,6 +873,7 @@ end
 
 function game.init()
     gfx.init()
+    sfx.init()
     game.restart()
 end
 
@@ -1294,7 +1332,11 @@ function game.render()
             renderPause()
         else
             if introTime < 1200 then
-                introTime = introTime + 1
+                if distance2ToPlayer({x=0, y=0}) > 200*200 then
+                    introTime = introTime + 3
+                else
+                    introTime = introTime + 1
+                end
                 if not player.dead then
                     -- intro interferes with dead message
                     renderIntro()
