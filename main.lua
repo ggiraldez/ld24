@@ -2,7 +2,7 @@ require('utils')
 local game = require('game')
 local input = require('input')
 local ticsPerSec = 60
-local showFPS = true
+local showFPS = false
 
 function love.load()
     math.randomseed(os.time())
@@ -34,13 +34,14 @@ do
 end
 
 function love.keypressed(key, unicode)
-    if key == "escape" then
-        love.event.push("quit")
-    elseif key == "numlock" then
-        debug.debug()
-        love.timer.step()
+    -- if key == "escape" then
+    --     love.event.push("quit")
+    -- elseif key == "numlock" then
+    --     debug.debug()
+    --     love.timer.step()
+    -- end
 
-    elseif key == "f11" then
+    if key == "f11" then
         love.graphics.toggleFullscreen()
 
     elseif key == "f2" then

@@ -14,10 +14,17 @@ function input.reset()
     input.right = false
 
     input.any = false
+    input.pressed = {}
+    input.escape = false
 end
 
 function input.keypressed(key, unicode)
-    input.any = true
+    if key == 'escape' then
+        input.escape = true
+    else
+        input.any = true
+        input.pressed[key] = true
+    end
 end
 
 input.reset()

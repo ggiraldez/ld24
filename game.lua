@@ -6,9 +6,13 @@ local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
 local screenSize = math.max(sw, sh)
 local farThreshold = 3 * screenSize
 
-local debug = true
+local debug = false
 local updateTime, updateAcc = 0, 0
 local renderTime, renderAcc = 0, 0
+
+local quitting = false
+
+local introTime = 0
 
 -- player = nil
 -- critters = {}
@@ -619,6 +623,7 @@ end
 
 function game.restart()
     globalTic = 0
+    introTime = 0
 
     -- create player critter
     player = createPlayer()
@@ -645,6 +650,29 @@ function game.tic()
     globalTic = globalTic + 1
     input.tic()
 
+    if input.escape then
+        if quitting then
+            quitting = false
+        else
+            quitting = true
+        end
+        input.reset()
+    end
+    if quitting then
+        if input.pressed['y'] then
+            love.event.push('quit')
+            return
+        elseif input.pressed['r'] then
+            quitting = false
+            game.restart()
+            input.reset()
+            return
+        elseif input.pressed['n'] then
+            quitting = false
+        end
+        input.reset()
+    end
+
     if not player.dead then
         -- player processing
         processPlayerInput()
@@ -654,6 +682,7 @@ function game.tic()
             game.restart()
             return
         end
+        input.reset()
     end
 
     -- garbage collection
@@ -828,7 +857,8 @@ end
 
 local function renderHUD()
     local s, w
-    local font = love.graphics.getFont()
+    local font = gfx.fonts.normal
+    love.graphics.setFont(font)
 
     -- render life
     love.graphics.push()
@@ -859,6 +889,7 @@ local function renderHUD()
 end
 
 local function renderDebug()
+    love.graphics.setFont(gfx.fonts.normal)
     love.graphics.setColor(255,255,255)
     local d = distanceToPlayer({x=0,y=0})
     local zone = zoneFromDistance(d)
@@ -873,13 +904,24 @@ local function renderDebug()
     love.graphics.print(str, 0, 10)
 end
 
+local function renderQuitConfirmation()
+    love.graphics.setColor(255,255,255,255)
+    local s = "Quit? Y/N"
+    local font = gfx.fonts.big
+    local w = font:getWidth(s)
+    love.graphics.setFont(font)
+    love.graphics.print(s, sw/2 - w/2, sh/2 - 10)
+    s = "(Press R to restart)"
+    w = font:getWidth(s)
+    love.graphics.print(s, sw/2 - w/2, sh/2 + 10)
+end
+
 local function renderDead()
     if not player.deadTime then
         player.deadTime = 120
     end
     if player.deadTime > 0 then
         player.deadTime = player.deadTime - 1
-        input.reset()
     end
 
     love.graphics.setColor(255,255,255,255*(120-player.deadTime)/120)
@@ -895,9 +937,46 @@ local function renderDead()
         w = font:getWidth(s)
         love.graphics.setFont(font)
         love.graphics.print(s, sw/2 - w/2, sh/2 + 10)
-    else
-        love.graphics.setFont(gfx.fonts.normal)
     end
+end
+
+local function renderIntro()
+    local fadeTime = 90
+
+    local function doText(text, font, y, color, from, to)
+        if from and to then
+            if introTime < from or introTime > to then
+                return
+            end
+            color = table.copy(color)
+            local df = introTime - from
+            if df < fadeTime then
+                color[4] = color[4] * df/fadeTime
+            end
+            local dt = to - introTime
+            if dt < 2*fadeTime then
+                color[4] = color[4] * dt/(2*fadeTime)
+            end
+        end
+        font = gfx.fonts[font]
+        love.graphics.setFont(font)
+        local w = font:getWidth(text)
+        love.graphics.setColor(color)
+        love.graphics.print(text, (sw-w)/2, y)
+    end
+
+    local color1 = { 255,255,255,192 }
+    doText('EVOLUTION', 'huge', sh/4, color1, 0, 800)
+    doText('a game by Gustavo Giráldez', 'big', sh/4+30, color1, 0.75*fadeTime, 800)
+
+    local color2 = { 255,255,255,128 }
+    doText('made for the Ludum Dare 24 compo', 'normal', sh/2+90, color2, 2*fadeTime, 800)
+    doText('August 2012', 'normal', sh/2+110, color2, 2.75*fadeTime, 800)
+
+    doText('use the mouse, arrow keys or WASD to guide your creature',
+           'normal', sh/2+170, color2, 3.5*fadeTime, 1200)
+    doText('eat the red and blue pills to regain life and energy',
+           'normal', sh/2+180, color2, 3.5*fadeTime, 1200)
 end
 
 function game.render()
@@ -931,10 +1010,21 @@ function game.render()
 
     love.graphics.pop()
 
-    renderHUD()
-
-    if player.dead then
-        renderDead()
+    if quitting then
+        renderQuitConfirmation()
+    else
+        if introTime < 1200 then
+            introTime = introTime + 1
+            if not player.dead then
+                -- intro interferes with dead message
+                renderIntro()
+            end
+        end
+        
+        renderHUD()
+        if player.dead then
+            renderDead()
+        end
     end
 
     renderAcc = renderAcc + love.timer.getMicroTime() - start
