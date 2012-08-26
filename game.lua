@@ -11,8 +11,9 @@ local updateTime, updateAcc = 0, 0
 local renderTime, renderAcc = 0, 0
 
 local quitting = false
+local paused = false
 
-local introTime = 0
+local introTime = 10000
 
 -- player = nil
 -- critters = {}
@@ -177,6 +178,20 @@ local function updateItem(it)
     it.y = it.y + it.v * math.sin(it.va)
 end
 
+local function consumeItem(critter, index)
+    local it = items[index]
+    if it.itype == 'food' then
+        critter.life = critter.life + 0.25 * critter.max_life
+        critter.life = math.min(critter.life, critter.max_life)
+    elseif it.itype == 'energy' then
+        critter.energy = critter.energy + 2
+        critter.energy = math.min(critter.energy, critter.max_energy)
+    end
+    -- just to make sure the item is invalid if we cached it somewhere
+    it.x = 1/0
+    it.y = 1/0
+    items[index] = createRandomItem(true)
+end
 
 
 --
@@ -191,18 +206,28 @@ local function createCritter(x, y, stype)
         x = x, y = y,           -- position (of the first segment)
         v = 0, va = angle,      -- velocity (value, angle)
         a = 0, aa = 0,          -- acceleration (value, angle)
+
         level = level,          -- overall level
         zone = 1,               -- zone the critter lives in
+
         max_v = 4,              -- maximum velocity
         friction = 0.02,        -- friction coefficient
+
         max_life = 10,          -- total life
-        life = 0,              -- current life
+        life = 0,               -- current life
+        hurt_time = 0,          -- timer when the critter takes damage
+        
         max_energy = 10,        -- total energy
         energy = 10,            -- current energy
+        
         attack = 0,             -- attack strength
+        attack_cooldown = 0,    -- must wait to attack again
+        
         dead = false,           -- is it dead yet?
-        size = 0,
+        
+        size = 0,               -- total size (sum of all segments * 2)
         color = { 255, 255, 255 },
+
         -- segments
         segs = {{ 
             x=x, y=y,                       -- position
@@ -399,6 +424,16 @@ local function updateCritter(c)
         c.life = 0
         c.dead = true
     end
+
+    -- attack cooldown
+    if c.attack_cooldown > 0 then
+        c.attack_cooldown = c.attack_cooldown - 1
+    end
+
+    -- timers
+    if c.hurt_time > 0 then
+        c.hurt_time = c.hurt_time - 1
+    end
 end
 
 local function critterDied(c)
@@ -409,25 +444,61 @@ local function critterDied(c)
         local x = c.x + (math.random()-0.5) * 4
         local y = c.y + (math.random()-0.5) * 4
         local s = createItem(x, y, stype)
-        s.ttl = math.random(3)*60*60
+        s.ttl = (math.random()*60+30)*60        -- decay 30-90 secs
         s.level = c.segs[i].level
         table.insert(segments, s)
     end
+end
+
+local function damageCritter(target, damage, source)
+    target.life = target.life - damage
+    target.hurt_time = 30
+end
+
+local function checkCritterAttack(attacker, defender)
+    local ar = attacker.segs[1].size    -- head
+    local dss = defender.segs
+    local hit = false
+    
+    -- check each of the defender segments
+    for i = 1, #dss do
+        local ds = dss[i]
+        if distance(attacker, ds) < ar then
+            hit = true
+            if ds.stype == 'attack' then
+                -- the attacker takes some damage
+                local thorns = ds.level
+                damageCritter(attacker, thorns, defender)
+            end
+        end
+    end
+
+    if hit then
+        -- the defender takes damage
+        local damage = attacker.attack
+        damageCritter(defender, damage, attacker)
+        attacker.attack_cooldown = 60
+    end
+    return hit
 end
 
 local function checkCollisions(c)
     local d
     local head_size2 = c.segs[1].size * c.segs[1].size
     
-    d = distance2(c, player)
-    if d < head_size2 then
-    end
+    if c.segs[1].stype == 'attack' and c.attack_cooldown <= 0 then
+        d = distance2(c, player)
+        if d < head_size2 then
+            -- attack player
+        end
 
-    if c.segs[1].stype == 'attack' then
-        for j = 1, #critters do
-            local cj = critters[j]
-            d = distance2(c, cj)
-            if d < head_size2 and c ~= cj then
+        if c.attack_cooldown <= 0 then
+            for j = 1, #critters do
+                local cj = critters[j]
+                d = distance2(c, cj)
+                if d < head_size2 and c ~= cj then
+                    -- if successful, break for the cooldown
+                end
             end
         end
     end
@@ -445,20 +516,6 @@ local function checkCollisions(c)
     end
 end
 
-local function consumeItem(critter, index)
-    local it = items[index]
-    if it.itype == 'food' then
-        critter.life = critter.life + 0.25 * critter.max_life
-        critter.life = math.min(critter.life, critter.max_life)
-    elseif it.itype == 'energy' then
-        critter.energy = critter.energy + 2
-        critter.energy = math.min(critter.energy, critter.max_energy)
-    end
-    -- just to make sure the item is invalid if we cached it somewhere
-    it.x = 1/0
-    it.y = 1/0
-    items[index] = createRandomItem(true)
-end
 
 
 
@@ -518,11 +575,17 @@ end
 local function checkPlayerCollisions()
     local d2
     local head_size2 = player.segs[1].size * player.segs[1].size
-    
-    for j = 1, #critters do
-        local cj = critters[j]
-        d2 = distance2(player, cj)
-        if d2 < head_size2 then
+
+    if player.attack_cooldown <= 0 then
+        for j = 1, #critters do
+            local cj = critters[j]
+            d2 = distance2(player, cj)
+            if d2 < head_size2 + cj.size*cj.size then
+                if checkCritterAttack(player, cj) then
+                    -- we got a hit so we are now in cooldown
+                    break
+                end
+            end
         end
     end
     
@@ -648,12 +711,16 @@ end
 function game.tic()
     local start = love.timer.getMicroTime()
 
-    globalTic = globalTic + 1
+    if not paused then
+        globalTic = globalTic + 1
+    end  
     input.tic()
 
     if input.escape then
         if quitting then
             quitting = false
+        elseif paused then
+            paused = false
         else
             quitting = true
         end
@@ -672,13 +739,21 @@ function game.tic()
             quitting = false
         end
         input.reset()
+    else
+        if paused then
+            if input.any then
+                paused = false
+                input.reset()
+            end
+        else
+            if input.pressed['p'] then
+                paused = not paused
+                input.reset()
+            end
+        end
     end
 
-    if not player.dead then
-        -- player processing
-        processPlayerInput()
-        updatePlayer()
-    else
+    if player.dead then
         if player.deadTime <= 0 and input.any then
             game.restart()
             return
@@ -686,6 +761,25 @@ function game.tic()
         input.reset()
     end
 
+    if not paused then
+        game.update()
+    end
+
+    -- compute update/tic time
+    updateAcc = updateAcc + love.timer.getMicroTime() - start
+    if globalTic % 60 == 0 then
+        updateTime = math.floor(updateAcc / 60 * 1000 * 1000)
+        updateAcc = 0
+    end
+end
+
+function game.update()
+    if not player.dead then
+        -- player processing
+        processPlayerInput()
+        updatePlayer()
+    end
+    
     -- garbage collection
     if globalTic % 60 == 0 then
         local itemsCollected = 0
@@ -758,13 +852,6 @@ function game.tic()
             checkCollisions(c)
         end
     end
-
-    -- compute update/tic time
-    updateAcc = updateAcc + love.timer.getMicroTime() - start
-    if globalTic % 60 == 0 then
-        updateTime = math.floor(updateAcc / 60 * 1000 * 1000)
-        updateAcc = 0
-    end
 end
 
 function game.toggleDebug()
@@ -820,7 +907,12 @@ local function renderCritter(c, micro_hud)
     local qs = gfx.quads
     local ss = c.segs
     local s = ss[1]
-    love.graphics.setColor(c.color)
+
+    if c.hurt_time > 0 and math.ceil(c.hurt_time/10) % 2 == 0 then
+        love.graphics.setColor(255,255,255,255)
+    else
+        love.graphics.setColor(c.color)
+    end
     love.graphics.drawq(img, qs.head[s.stype][s.level], s.x, s.y, (s.angle+math.pi), 1, 1, 16, 16)
     for i = 2, #ss-1 do
         s = ss[i]
@@ -830,6 +922,7 @@ local function renderCritter(c, micro_hud)
         s = ss[#ss]
         love.graphics.drawq(img, qs.tail[s.stype][s.level], s.x, s.y, (s.angle), 1, 1, 16, 16)
     end
+
     if micro_hud then
         local x = c.x - 8
         local y = c.y - ss[1].size - 4
@@ -905,16 +998,23 @@ local function renderDebug()
     love.graphics.print(str, 0, 10)
 end
 
+local function printCenteredText(text, font, y)
+    font = gfx.fonts[font]
+    local w = font:getWidth(text)
+    love.graphics.setFont(font)
+    love.graphics.print(text, (sw-w)/2, y)
+end
+
+local function renderPause()
+    love.graphics.setColor(255,255,255,255)
+    printCenteredText("Paused", 'big', sh/2 + 60)
+    printCenteredText("Press any key to resume", 'normal', sh/2 + 80)
+end
+
 local function renderQuitConfirmation()
     love.graphics.setColor(255,255,255,255)
-    local s = "Quit? Y/N"
-    local font = gfx.fonts.big
-    local w = font:getWidth(s)
-    love.graphics.setFont(font)
-    love.graphics.print(s, sw/2 - w/2, sh/2 - 10)
-    s = "(Press R to restart)"
-    w = font:getWidth(s)
-    love.graphics.print(s, sw/2 - w/2, sh/2 + 10)
+    printCenteredText("Quit? Y/N", 'big', sh/2 + 60)
+    printCenteredText("(Press R to restart)", 'normal', sh/2 + 80)
 end
 
 local function renderDead()
@@ -926,18 +1026,10 @@ local function renderDead()
     end
 
     love.graphics.setColor(255,255,255,255*(120-player.deadTime)/120)
-    local s = "You died :("
-    local font = gfx.fonts.big
-    local w = font:getWidth(s)
-    love.graphics.setFont(font)
-    love.graphics.print(s, sw/2 - w/2, sh/2 - 20)
+    printCenteredText("You died :(", 'big', sh/2 - 20)
 
     if player.deadTime <= 0 then
-        font = gfx.fonts.normal
-        s = "Press any key to restart"
-        w = font:getWidth(s)
-        love.graphics.setFont(font)
-        love.graphics.print(s, sw/2 - w/2, sh/2 + 10)
+        printCenteredText('Press any key to restart', 'normal', sh/2 + 10)
     end
 end
 
@@ -1014,11 +1106,15 @@ function game.render()
     if quitting then
         renderQuitConfirmation()
     else
-        if introTime < 1200 then
-            introTime = introTime + 1
-            if not player.dead then
-                -- intro interferes with dead message
-                renderIntro()
+        if paused then
+            renderPause()
+        else
+            if introTime < 1200 then
+                introTime = introTime + 1
+                if not player.dead then
+                    -- intro interferes with dead message
+                    renderIntro()
+                end
             end
         end
         
