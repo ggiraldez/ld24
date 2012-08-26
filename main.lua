@@ -42,7 +42,7 @@ function love.keypressed(key, unicode)
     -- end
 
     if key == "f11" then
-        love.graphics.toggleFullscreen()
+        --love.graphics.toggleFullscreen()
 
     elseif key == "f2" then
         game.toggleDebug()

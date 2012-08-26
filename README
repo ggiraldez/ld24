@@ -1,0 +1,19 @@
+PINCERS
+
+A simple game made by Gustavo Giráldez for the Ludum Dare 24 compo (theme
+Evolution) in August 26th, 2012.
+
+
+Instructions
+
+Use the mouse, arrow keys or WASD to guide your creature. Eat the red and blue
+pills to regain life and energy. Attack other creatures to destroy them. Evolve
+your creature by taking the remains of your enemy.
+
+Press Escape to quit or restart the game. Press P to pause.
+
+
+The game is programmed in Lua using the Löve game framework. Graphics were
+drawn with the Gimp. The in-game font is Victor-Pixel grabbed from
+http://www.dafont.com/victors-pixel-font.font
+
