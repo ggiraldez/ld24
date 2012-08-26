@@ -63,6 +63,7 @@ function love.draw()
     love.graphics.pop()
 
     if showFPS then
+        love.graphics.setColor(255,255,255)
         love.graphics.print(love.timer.getFPS() .. " fps", 0, 0)
     end
 end
