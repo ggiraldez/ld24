@@ -10,6 +10,7 @@ local debug = true
 -- player = nil
 -- critters = {}
 -- items = {}
+-- segments = {}
 
 --
 -- Constants
@@ -36,6 +37,9 @@ local segmentSizes = {
 
 local itemTypes = { 'food', 'energy', 'life', 'speed', 'attack' }
 
+local shelters = {
+    { x=0, y=0, size=50 }
+}
 
 
 -- 
@@ -60,10 +64,12 @@ local function computeZones()
     end
 end
 
+computeZones()
+
 local function zoneFromDistance(d)
     local zone = #zones
     for z = 1,#zones do
-        if d < zones[z].outer and d > zones[z].inner then
+        if d < zones[z].outer and d >= zones[z].inner then
             zone = z
             break
         end
@@ -74,8 +80,6 @@ end
 local function zoneFromCoordinates(x, y)
     return zoneFromDistance(math.sqrt(x*x + y*y))
 end
-
-computeZones()
 
 local function distanceToPlayer(c)
     local dx = c.x - player.x
@@ -113,6 +117,16 @@ local function randomCoordinates(hidden)
     y = y + player.y
     x = x + player.x
     return x, y
+end
+
+local function onScreen(x, y)
+    local border = 60
+    if x > player.x - sw/2 - border and x < player.x + sw/2 + border and
+        y > player.y - sh/2 - border and y < player.y + sh/2 + border then
+        return true
+    else
+        return false
+    end
 end
 
 --
@@ -164,7 +178,7 @@ local function createCritter(x, y, stype)
         max_v = 4,              -- maximum velocity
         friction = 0.02,        -- friction coefficient
         max_life = 10,          -- total life
-        life = 10,              -- current life
+        life = 0,              -- current life
         max_energy = 10,        -- total energy
         energy = 10,            -- current energy
         attack = 0,             -- attack strength
@@ -356,6 +370,26 @@ local function updateCritter(c)
 
         updateSegments(c)
     end
+
+    -- life decay
+    c.life = c.life - c.max_life / (4 * 60 * 60)
+    if c.life <= 0 then
+        c.life = 0
+        c.dead = true
+    end
+end
+
+local function critterDied(c)
+    -- spawn segments
+    print("Critter died")
+    for i = 1, #(c.segs) do
+        local stype = c.segs[i].stype
+        local x = c.x + (math.random()-0.5) * 4
+        local y = c.y + (math.random()-0.5) * 4
+        local s = createItem(x, y, stype)
+        s.ttl = math.random(3)*60*60
+        table.insert(segments, s)
+    end
 end
 
 
@@ -367,6 +401,8 @@ local function createPlayer()
     local player = createCritter(0, 0, 'attack')
     addSegment(player, 'life')
     updateStats(player)
+    player.life = player.max_life
+    player.energy = player.max_energy
     return player
 end
 
@@ -394,6 +430,17 @@ local function processPlayerInput()
     end
 end
 
+local function updatePlayer()
+    updateCritter(player)
+    for i = 1, #shelters do
+        local s = shelters[i]
+        if distanceToPlayer(s) < s.size then
+            player.life = player.life + (player.max_life / (60 * 10))
+            player.life = math.min(player.life, player.max_life)
+            break
+        end
+    end
+end
 
 
 --
@@ -427,6 +474,8 @@ local function createRandomCritter(hidden)
         end
     end
     updateStats(c)
+    c.life = c.max_life * (math.random()*0.3+0.7)
+    c.energy = c.max_energy
     return c
 end
 
@@ -492,6 +541,9 @@ function game.restart()
     for i = 1, 100 do
         table.insert(items, createRandomItem())
     end
+
+    -- segments: these are items but their lifetime is different from the regular items
+    segments = {}
 end
 
 function game.tic()
@@ -500,13 +552,7 @@ function game.tic()
 
     -- player processing
     processPlayerInput()
-    updateCritter(player)
-
-    -- other critters processing
-    for i = 1, #critters do
-        aiCritter(critters[i])
-        updateCritter(critters[i])
-    end
+    updatePlayer()
 
     -- garbage collection
     if globalTic % 60 == 0 then
@@ -531,9 +577,37 @@ function game.tic()
         print("Garbage collected "..crittersCollected.." critters")
     end
 
+    -- other critters processing
+    for i = 1, #critters do
+        local c = critters[i]
+        if c.dead then
+            critterDied(c)
+            c = createRandomCritter(true)
+            critters[i] = c
+        end
+        aiCritter(c)
+        updateCritter(c)
+    end
+
     -- update items position and rotation
     for i = 1, #items do
         updateItem(items[i])
+    end
+    -- update segments
+    local deadSegments = {}
+    for i = 1, #segments do
+        local s = segments[i]
+        updateItem(s)
+        s.ttl = s.ttl - 1
+        if s.ttl <= 0 then
+            table.insert(deadSegments, i)
+        end
+    end
+    if #deadSegments > 0 then
+        for i = #deadSegments,1,-1 do
+            table.remove(segments, deadSegments[i])
+        end
+        print("Collected " .. #deadSegments .. " segments")
     end
 end
 
@@ -572,10 +646,20 @@ local function renderBackground()
     love.graphics.pop()
     tileBackground(player.x, player.y, gfx.bg.near)
 
-    love.graphics.circle('line', 0, 0, 50)
+end
+
+local function renderShelters()
+    love.graphics.setColor(255, 255, 255, 128)
+    for i = 1, #shelters do
+        local s = shelters[i]
+        love.graphics.circle('line', s.x, s.y, s.size)
+    end
 end
 
 local function renderCritter(c)
+    if not onScreen(c.x, c.y) then
+        return
+    end
     local img = gfx.images.segments
     local qs = gfx.quads
     local ss = c.segs
@@ -592,13 +676,61 @@ local function renderCritter(c)
     end
 end
 
-local function renderItems()
+local function renderItems(items)
     local img = gfx.images.items
     local qs = gfx.quads.items
     for i = 1, #items do
         local it = items[i]
-        love.graphics.drawq(img, qs[it.itype], it.x, it.y, it.angle, 1, 1, 8, 8)
+        if onScreen(it.x, it.y) then
+            if it.ttl and it.ttl < 120 then
+                love.graphics.setColor(255,255,255,192*(it.ttl/120))
+            else
+                love.graphics.setColor(255,255,255,192)
+            end
+            love.graphics.drawq(img, qs[it.itype], it.x, it.y, it.angle, 1, 1, 8, 8)
+        end
     end
+end
+
+local function renderHUD()
+    local s, w
+    local font = love.graphics.getFont()
+
+    -- render life
+    love.graphics.push()
+        love.graphics.translate(10, sh-20)
+        love.graphics.setColor(255,255,255,128)
+        love.graphics.rectangle('line', 0, 0, 202, 10)
+        s = math.ceil(player.life) .. "/" .. player.max_life
+        love.graphics.print(s, 212, -3)
+        love.graphics.setColor(64,64,64,128)
+        love.graphics.rectangle('fill', 1, 1, 200, 8)
+        love.graphics.setColor(160,0,0,128)
+        love.graphics.rectangle('fill', 1, 1, (player.life/player.max_life*200), 8)
+    love.graphics.pop()
+
+    -- render energy
+    love.graphics.push()
+        love.graphics.translate(sw-212, sh-20)
+        love.graphics.setColor(255,255,255,128)
+        love.graphics.rectangle('line', 0, 0, 202, 10)
+        s = math.ceil(player.energy) .. "/" .. player.max_energy
+        w = font:getWidth(s)
+        love.graphics.print(s, -10 - w, -3)
+        love.graphics.setColor(64,64,64,128)
+        love.graphics.rectangle('fill', 1, 1, 200, 8)
+        love.graphics.setColor(0,0,160,128)
+        love.graphics.rectangle('fill', 1, 1, (player.energy/player.max_energy*200), 8)
+    love.graphics.pop()
+end
+
+local function renderDebug()
+    love.graphics.setColor(255,255,255)
+    local d = distanceToPlayer({x=0,y=0})
+    local zone = zoneFromDistance(d)
+    local str = love.timer.getFPS() .. " fps, zone "..zone..", dist ".. math.ceil(d)
+    str = str .. ", " .. #critters .. " critters, " .. #items .. " items, " .. #segments .. " segments"
+    love.graphics.print(str, 0, 0)
 end
 
 function game.render()
@@ -612,9 +744,11 @@ function game.render()
     love.graphics.push()
     love.graphics.translate(sw/2 - player.x, sh/2 - player.y)
     
-    love.graphics.setColor(255,255,255)
     renderBackground()
-    renderItems()
+    renderShelters()
+
+    renderItems(items)
+    renderItems(segments)
 
     renderCritter(player)
     for i = 1, #critters do
@@ -623,12 +757,10 @@ function game.render()
 
     love.graphics.pop()
 
+    renderHUD()
+
     if debug then
-        love.graphics.setColor(255,255,255)
-        local zone = zoneFromDistance(d)
-        local str = love.timer.getFPS() .. " fps, zone "..zone..", dist ".. math.ceil(d)
-        local w = love.graphics.getFont():getWidth(str)
-        love.graphics.print(str, 0, 0)
+        renderDebug()
     end
 end
 
