@@ -538,7 +538,9 @@ function game.render()
 
     if debug then
         local zone = zoneFromDistance(d)
-        love.graphics.print("d=" .. math.ceil(d) .. ", zone: " .. zone, sw-200,0)
+        local str = "zone "..zone..", dist ".. math.ceil(d)
+        local w = love.graphics.getFont():getWidth(str)
+        love.graphics.print(str, sw-w,0)
     end
 end
 

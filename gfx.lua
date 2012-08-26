@@ -97,8 +97,13 @@ end
 function gfx.init()
     print("Creating backgrounds")
     gfx.createBackgrounds()
+    
     print("Loading textures")
     gfx.load()
+
+    print("Loading font")
+    local font = love.graphics.newFont("assets/victor-pixel.ttf", 14)
+    love.graphics.setFont(font)
 end
 
 return gfx
