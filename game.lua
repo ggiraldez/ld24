@@ -3,6 +3,8 @@ require('gfx')
 game = {}
 
 local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
+local screenSize = math.max(sw, sh)
+local farThreshold = 3 * screenSize
 local debug = true
 
 -- player = nil
@@ -47,7 +49,7 @@ local function computeZones()
     local outer = 700
     local delta = 500
     local inc = 1.1
-    for lvl = 1,50 do
+    for lvl = 1,100 do
         table.insert(zones, {
             inner=inner,
             outer=outer
@@ -69,8 +71,80 @@ local function zoneFromDistance(d)
     return zone
 end
 
+local function zoneFromCoordinates(x, y)
+    return zoneFromDistance(math.sqrt(x*x + y*y))
+end
+
 computeZones()
 
+local function distanceToPlayer(c)
+    local dx = c.x - player.x
+    local dy = c.y - player.y
+    return math.sqrt(dx*dx + dy*dy)
+end
+
+local function distance2ToPlayer(c)
+    local dx = c.x - player.x
+    local dy = c.y - player.y
+    return dx*dx + dy*dy
+end
+
+local function tooFar(c)
+    if distance2ToPlayer(c) > farThreshold*farThreshold then
+        return true
+    else
+        return false
+    end
+end
+
+local function randomCoordinates(hidden)
+    local span = 0.75 * farThreshold
+    local x = (math.random()-0.5) * span
+    local y = (math.random()-0.5) * span
+    if hidden then
+        -- if hidden requested, make sure the coordinates don't fall within currently screen coordinates
+        if math.abs(x) < sw/2 then
+            x = x + sw/2 * x/math.abs(x)
+        end
+        if math.abs(y) < sh/2 then
+            y = y + sh/2 * y/math.abs(y)
+        end
+    end
+    y = y + player.y
+    x = x + player.x
+    return x, y
+end
+
+--
+-- Items code
+--
+
+local function createItem(x, y, itype)
+    return {
+        x=x, y=y, itype=itype, 
+        angle=math.random()*2*math.pi,
+        spin=(math.random()-0.5)*math.pi/50,
+        v=math.random()*.2,
+        va=math.random()*2*math.pi
+    }
+end
+
+local function createRandomItem(hidden)
+    local itype
+    if math.random(10) > 4 then
+        itype = 'food'
+    else
+        itype = 'energy'
+    end
+    local x, y = randomCoordinates(hidden)
+    return createItem(x, y, itype)
+end
+
+local function updateItem(it)
+    it.angle = (it.angle + it.spin) % (2*math.pi)
+    it.x = it.x + it.v * math.cos(it.va)
+    it.y = it.y + it.v * math.sin(it.va)
+end
 
 
 --
@@ -86,6 +160,7 @@ local function createCritter(x, y, stype)
         v = 0, va = angle,      -- velocity (value, angle)
         a = 0, aa = 0,          -- acceleration (value, angle)
         level = level,          -- overall level
+        zone = 1,               -- zone the critter lives in
         max_v = 4,              -- maximum velocity
         friction = 0.02,        -- friction coefficient
         max_life = 10,          -- total life
@@ -93,6 +168,7 @@ local function createCritter(x, y, stype)
         max_energy = 10,        -- total energy
         energy = 10,            -- current energy
         attack = 0,             -- attack strength
+        dead = false,           -- is it dead yet?
         color = { 255, 255, 255 },
         -- segments
         segs = {{ 
@@ -121,7 +197,7 @@ local function updateStats(c)
         if seg.stype == 'life' then
             l = l + seg.level
             cl = cl + 1
-            max_life = max_life + 2*seg.level
+            max_life = max_life + 4*seg.level
             max_energy = max_energy + 1
             friction = friction - 1
 
@@ -153,7 +229,7 @@ local function updateStats(c)
     c.max_energy = max_energy
 
     max_speed = 4 + s - cl
-    max_speed = math.max(0.5, math.min(10, max_speed))
+    max_speed = math.max(1.5, math.min(10, max_speed))
     c.max_v = max_speed
 
     friction = math.min(1, math.max(20, friction))
@@ -287,6 +363,13 @@ end
 -- Player code
 -- 
 
+local function createPlayer()
+    local player = createCritter(0, 0, 'attack')
+    addSegment(player, 'life')
+    updateStats(player)
+    return player
+end
+
 local function processPlayerInput()
     local a = 0.2
     local ax, ay = 0, 0
@@ -317,6 +400,36 @@ end
 -- AI code
 -- 
 
+local function createRandomCritter(hidden)
+    local x, y = randomCoordinates(hidden)
+    local zone = zoneFromCoordinates(x, y)
+    
+    local level = math.random(math.ceil(zone/2), zone)
+    local stype
+    if level == 1 then
+        -- no attack critters of level 1 (and in zone 1)
+        stype = segmentTypes[math.random(2)]
+    else
+        stype = segmentTypes[math.random(#segmentTypes)]
+    end
+
+    local c = createCritter(x, y, stype)
+    c.zone = zone
+
+    while level > c.level do
+        addSegment(c, segmentTypes[math.random(#segmentTypes)])
+        local ii = #(c.segs)-1
+        for i = 1,ii  do
+            evolveSegment(c, i)
+            if level <= c.level then
+                break
+            end
+        end
+    end
+    updateStats(c)
+    return c
+end
+
 local function aiCritter(c)
     if c.tic == nil then
         c.tic = globalTic
@@ -332,7 +445,7 @@ local function aiCritter(c)
             c.a = 0.5
             c.count = 10
 
-            local z = zones[c.level]
+            local z = zones[c.zone]
 
             if d < z.inner then
                 c.aa = math.atan2(c.y, c.x) + (math.random()-0.5) * math.pi*3/4
@@ -354,27 +467,6 @@ end
 
 
 --
--- Items code
---
-
-local function createItem(x, y, itype)
-    return {
-        x=x, y=y, itype=itype, 
-        angle=math.random()*2*math.pi,
-        spin=(math.random()-0.5)*math.pi/50,
-        v=math.random()*.2,
-        va=math.random()*2*math.pi
-    }
-end
-
-local function updateItem(it)
-    it.angle = (it.angle + it.spin) % (2*math.pi)
-    it.x = it.x + it.v * math.cos(it.va)
-    it.y = it.y + it.v * math.sin(it.va)
-end
-
-
---
 -- General game loop code
 --
 
@@ -387,47 +479,18 @@ function game.restart()
     globalTic = 0
 
     -- create player critter
-    player = createCritter(0, 0, 'attack')
-    addSegment(player, 'life')
-    updateStats(player)
+    player = createPlayer()
     
     -- populate critters
     critters = {}
     for i = 1, 100 do
-        local c
-        local stype = segmentTypes[math.random(#segmentTypes)]
-        local level = math.random(5)
-        if stype == 'attack' then
-            level = math.max(level, 2)
-        end
-                
-        -- FIXME: these should be calculated according to critter level
-        local z = zones[level]
-        local angle = math.random() * 2 * math.pi
-        local d = math.random(z.inner, z.outer)
-        local x = d * math.cos(angle)
-        local y = d * math.sin(angle)
-        
-        c = createCritter(x, y, stype)
-        while level > 1 do
-            addSegment(c, segmentTypes[math.random(#segmentTypes)])
-            level = level - 1
-            for i = 1, math.min(level, #(c.segs)-1) do
-                evolveSegment(c, i)
-            end
-            level = level - i
-        end
-        updateStats(c)
-        table.insert(critters, c)
+        table.insert(critters, createRandomCritter())
     end
 
     -- populate items
     items = {}
-    for i = 1, 50 do
-        local it = itemTypes[math.random(2)]
-        local x = (math.random()-0.5) * 2000
-        local y = (math.random()-0.5) * 2000
-        table.insert(items, createItem(x, y, it))
+    for i = 1, 100 do
+        table.insert(items, createRandomItem())
     end
 end
 
@@ -435,14 +498,40 @@ function game.tic()
     globalTic = globalTic + 1
     input.tic()
 
+    -- player processing
     processPlayerInput()
-
     updateCritter(player)
+
+    -- other critters processing
     for i = 1, #critters do
         aiCritter(critters[i])
         updateCritter(critters[i])
     end
 
+    -- garbage collection
+    if globalTic % 60 == 0 then
+        local itemsCollected = 0
+        for i = 1, #items do
+            if tooFar(items[i]) then
+                items[i] = createRandomItem(true)
+                itemsCollected = itemsCollected + 1
+            end
+        end
+        print("Garbage collected "..itemsCollected.." items")
+    end
+    if globalTic % 60 == 29 then
+        local crittersCollected = 0
+        for i = 1, #critters do
+            if tooFar(critters[i]) then
+                critters[i].dead = true
+                critters[i] = createRandomCritter(true)
+                crittersCollected = crittersCollected + 1
+            end
+        end
+        print("Garbage collected "..crittersCollected.." critters")
+    end
+
+    -- update items position and rotation
     for i = 1, #items do
         updateItem(items[i])
     end
@@ -532,15 +621,14 @@ function game.render()
         renderCritter(critters[i])
     end
 
-    love.graphics.setColor(255,255,255)
-
     love.graphics.pop()
 
     if debug then
+        love.graphics.setColor(255,255,255)
         local zone = zoneFromDistance(d)
-        local str = "zone "..zone..", dist ".. math.ceil(d)
+        local str = love.timer.getFPS() .. " fps, zone "..zone..", dist ".. math.ceil(d)
         local w = love.graphics.getFont():getWidth(str)
-        love.graphics.print(str, sw-w,0)
+        love.graphics.print(str, 0, 0)
     end
 end
 
