@@ -13,7 +13,7 @@ cd exe
 cd ..
 
 echo Building for 32 bits
-set LOVEPREFIX="d:\love-0.8.0-win-x86"
+set LOVEPREFIX="D:\love-20120827-0758bba0be8a-win-x86-default"
 rmdir /s /q exe32
 mkdir exe32
 7z a exe32\ld24.zip *.lua README assets\*.png assets\*.ttf assets\*.wav
