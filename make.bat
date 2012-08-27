@@ -5,7 +5,8 @@ mkdir exe
 7z a exe\ld24.zip *.lua README assets\*.png assets\*.ttf assets\*.wav
 copy /b %LOVEPREFIX%\love.exe + exe\ld24.zip exe\pincers.exe
 copy %LOVEPREFIX%\*.dll exe
-del exe\ld24.zip
+move exe\ld24.zip exe\pincers.love
 cd exe
 7z a pincers.zip pincers.exe *.dll
+cd ..
 
