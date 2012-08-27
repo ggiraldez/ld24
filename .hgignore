@@ -1,5 +1,6 @@
 syntax: glob
 exe/*
+exe32/*
 *.swp
 *.zip
 
