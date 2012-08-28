@@ -7,9 +7,10 @@ mkdir exe
 7z a exe\ld24.zip *.lua README assets\*.png assets\*.ttf assets\*.wav
 copy /b %LOVEPREFIX%\love.exe + exe\ld24.zip exe\pincers.exe
 copy %LOVEPREFIX%\*.dll exe
+copy README exe
 move exe\ld24.zip exe\pincers.love
 cd exe
-7z a pincers.zip pincers.exe *.dll
+7z a pincers.zip pincers.exe *.dll README
 cd ..
 
 echo Building for 32 bits
@@ -19,8 +20,9 @@ mkdir exe32
 7z a exe32\ld24.zip *.lua README assets\*.png assets\*.ttf assets\*.wav
 copy /b %LOVEPREFIX%\love.exe + exe32\ld24.zip exe32\pincers32.exe
 copy %LOVEPREFIX%\*.dll exe32
+copy README exe32
 move exe32\ld24.zip exe32\pincers.love
 cd exe32
-7z a pincers32.zip pincers32.exe *.dll
+7z a pincers32.zip pincers32.exe *.dll README
 cd ..
 
