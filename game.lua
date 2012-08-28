@@ -711,6 +711,7 @@ local function createPlayer()
     updateStats(player)
     player.life = player.max_life
     player.energy = player.max_energy
+    player.deadTime = 0                 -- initialize to avoid possible bugs
     return player
 end
 
@@ -740,16 +741,18 @@ end
 
 local function updatePlayer()
     updateCritter(player)
-    for i = 1, #shelters do
-        local s = shelters[i]
-        if distanceToPlayer(s) < s.size then
-            player.life = player.life + (player.max_life / (60 * 10))
-            player.life = math.min(player.life, player.max_life)
-            break
-        end
-    end
     if player.dead then
         critterDied(player)
+        player.deadTime = 120
+    else
+        for i = 1, #shelters do
+            local s = shelters[i]
+            if distanceToPlayer(s) < s.size then
+                player.life = player.life + (player.max_life / (60 * 10))
+                player.life = math.min(player.life, player.max_life)
+                break
+            end
+        end
     end
 end
 
@@ -1234,9 +1237,6 @@ local function renderQuitConfirmation()
 end
 
 local function renderDead()
-    if not player.deadTime then
-        player.deadTime = 120
-    end
     if player.deadTime > 0 then
         player.deadTime = player.deadTime - 1
     end
