@@ -2,7 +2,7 @@ function love.conf(t)
     t.title = "Pincers"
     t.author = "Gustavo Giráldez"
 
-    t.screen.width = 1024
-    t.screen.height = 600
+    t.window.width = 1024
+    t.window.height = 600
 end
 
