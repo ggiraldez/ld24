@@ -904,7 +904,7 @@ function game.restart()
 end
 
 function game.tic()
-    local start = love.timer.getMicroTime()
+    local start = love.timer.getTime()
 
     if not paused then
         globalTic = globalTic + 1
@@ -961,7 +961,7 @@ function game.tic()
     end
 
     -- compute update/tic time
-    updateAcc = updateAcc + love.timer.getMicroTime() - start
+    updateAcc = updateAcc + love.timer.getTime() - start
     if globalTic % 60 == 0 then
         updateTime = math.floor(updateAcc / 60 * 1000 * 1000)
         updateAcc = 0
@@ -1107,14 +1107,14 @@ local function renderCritter(c, micro_hud)
     else
         love.graphics.setColor(c.color)
     end
-    love.graphics.drawq(img, qs.head[s.stype][s.level], s.x, s.y, (s.angle+math.pi), 1, 1, 16, 16)
+    love.graphics.draw(img, qs.head[s.stype][s.level], s.x, s.y, (s.angle+math.pi), 1, 1, 16, 16)
     for i = 2, #ss-1 do
         s = ss[i]
-        love.graphics.drawq(img, qs.body[s.stype][s.level], s.x, s.y, (s.angle), 1, 1, 16, 16)
+        love.graphics.draw(img, qs.body[s.stype][s.level], s.x, s.y, (s.angle), 1, 1, 16, 16)
     end
     if #ss > 1 then
         s = ss[#ss]
-        love.graphics.drawq(img, qs.tail[s.stype][s.level], s.x, s.y, (s.angle), 1, 1, 16, 16)
+        love.graphics.draw(img, qs.tail[s.stype][s.level], s.x, s.y, (s.angle), 1, 1, 16, 16)
     end
 
     if micro_hud then
@@ -1138,7 +1138,7 @@ local function renderItems(items)
             else
                 love.graphics.setColor(255,255,255,192)
             end
-            love.graphics.drawq(img, qs[it.itype], it.x, it.y, it.angle, 1, 1, 8, 8)
+            love.graphics.draw(img, qs[it.itype], it.x, it.y, it.angle, 1, 1, 8, 8)
         end
     end
 end
@@ -1289,7 +1289,7 @@ local function renderIntro()
 end
 
 function game.render()
-    local start = love.timer.getMicroTime()
+    local start = love.timer.getTime()
 
     -- background color is a function of the distance of the player to the origin
     local d = math.sqrt(player.x*player.x + player.y*player.y)
@@ -1353,7 +1353,7 @@ function game.render()
         end
     end
 
-    renderAcc = renderAcc + love.timer.getMicroTime() - start
+    renderAcc = renderAcc + love.timer.getTime() - start
     if globalTic % 60 == 0 then
         renderTime = math.floor(renderAcc / 60 * 1000)
         renderAcc = 0
