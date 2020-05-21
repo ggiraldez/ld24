@@ -278,7 +278,7 @@ local function createCritter(x, y, stype)
         dead = false,           -- is it dead yet?
 
         size = 0,               -- total size (sum of all segments * 2)
-        color = { 255, 255, 255 },
+        color = { 1, 1, 1 },
 
         eaten = {               -- count of levels eaten of each type to figure out
             life = 0,           -- what type will be the new segment
@@ -360,9 +360,9 @@ local function updateStats(c)
 
     local total = l + s + a
     c.color = {
-        math.min(255, 80*l/total+192),
-        math.min(255, 80*s/total+192),
-        math.min(255, 80*a/total+192)
+        math.min(1, 0.3*l/total+0.75),
+        math.min(1, 0.3*s/total+0.75),
+        math.min(1, 0.3*a/total+0.75)
     }
 end
 
@@ -1077,7 +1077,7 @@ end
 --
 
 local function renderBackground()
-    love.graphics.setColor(255, 255, 255, 128)
+    love.graphics.setColor(1, 1, 1, 0.5)
 
     local function tileBackground(ox, oy, tiles)
         -- all backgrounds assumed to be the same dimensions
@@ -1104,7 +1104,7 @@ local function renderBackground()
 end
 
 local function renderShelters()
-    love.graphics.setColor(255, 255, 255, 128)
+    love.graphics.setColor(1, 1, 1, 0.5)
     for i = 1, #shelters do
         local s = shelters[i]
         love.graphics.circle('line', s.x, s.y, s.size)
@@ -1121,7 +1121,7 @@ local function renderCritter(c, micro_hud)
     local s = ss[1]
 
     if c.hurt_time > 0 and math.ceil(c.hurt_time/10) % 2 == 0 then
-        love.graphics.setColor(255,255,255,255)
+        love.graphics.setColor(1,1,1,1)
     else
         love.graphics.setColor(c.color)
     end
@@ -1138,9 +1138,9 @@ local function renderCritter(c, micro_hud)
     if micro_hud then
         local x = c.x - 8
         local y = c.y - ss[1].size - 4
-        love.graphics.setColor(255,255,255,128)
+        love.graphics.setColor(1,1,1,0.5)
         love.graphics.rectangle('fill', x-1, y-1, 16, 4)
-        love.graphics.setColor(255,0,0,160)
+        love.graphics.setColor(1,0,0,0.75)
         love.graphics.rectangle('fill', x, y, math.max(0,c.life/c.max_life)*16, 2)
     end
 end
@@ -1152,9 +1152,9 @@ local function renderItems(items)
         local it = items[i]
         if onScreen(it.x, it.y) then
             if it.ttl and it.ttl < 120 then
-                love.graphics.setColor(255,255,255,192*(it.ttl/120))
+                love.graphics.setColor(1,1,1,0.75*(it.ttl/120))
             else
-                love.graphics.setColor(255,255,255,192)
+                love.graphics.setColor(1,1,1,0.75)
             end
             love.graphics.draw(img, qs[it.itype], it.x, it.y, it.angle, 1, 1, 8, 8)
         end
@@ -1169,51 +1169,51 @@ local function renderHUD()
     -- render life
     love.graphics.push()
         love.graphics.translate(10, sh-20)
-        love.graphics.setColor(255,255,255,128)
+        love.graphics.setColor(1,1,1,0.5)
         love.graphics.rectangle('line', 0, 0, 202, 10)
         s = math.ceil(player.life) .. "/" .. player.max_life
         love.graphics.print(s, 212, -3)
-        love.graphics.setColor(64,64,64,128)
+        love.graphics.setColor(0.25,0.25,0.25,0.5)
         love.graphics.rectangle('fill', 1, 1, 200, 8)
-        love.graphics.setColor(160,0,0,128)
+        love.graphics.setColor(0.75,0,0,0.5)
         love.graphics.rectangle('fill', 1, 1, math.max(0, player.life/player.max_life*200), 8)
     love.graphics.pop()
 
     -- render energy
     love.graphics.push()
         love.graphics.translate(sw-212, sh-20)
-        love.graphics.setColor(255,255,255,128)
+        love.graphics.setColor(1,1,1,0.5)
         love.graphics.rectangle('line', 0, 0, 202, 10)
         s = math.ceil(player.energy) .. "/" .. player.max_energy
         w = font:getWidth(s)
         love.graphics.print(s, -10 - w, -3)
-        love.graphics.setColor(64,64,64,128)
+        love.graphics.setColor(0.25,0.25,0.25,0.5)
         love.graphics.rectangle('fill', 1, 1, 200, 8)
-        love.graphics.setColor(0,0,160,128)
+        love.graphics.setColor(0,0,0.75,0.5)
         love.graphics.rectangle('fill', 1, 1, math.max(0, player.energy/player.max_energy*200), 8)
     love.graphics.pop()
 
     -- level and progress to next level
     love.graphics.push()
         love.graphics.translate(sw/2, sh-18)
-        love.graphics.setColor(255,255,255,128)
+        love.graphics.setColor(1,1,1,0.5)
         s = ""..player.level
         w = font:getWidth(s)
         love.graphics.print(s, -110-w, -5)
-        love.graphics.setColor(64,64,64,128)
+        love.graphics.setColor(0.25,0.25,0.25,0.5)
         love.graphics.rectangle('fill', -100, 0, 200, 4)
-        love.graphics.setColor(255,192,0,192)
+        love.graphics.setColor(1,0.75,0,0.75)
         love.graphics.rectangle('fill', -100, 0, (player.progress/player.level*200), 4)
 
         local stype = nextSegmentType(player)
         if stype == 'life' then
-            love.graphics.setColor(200,0,0,192)
+            love.graphics.setColor(0.85,0,0,0.75)
         elseif stype == 'speed' then
-            love.graphics.setColor(0,200,0,192)
+            love.graphics.setColor(0,0.85,0,0.75)
         elseif stype == 'attack' then
-            love.graphics.setColor(0,0,200,192)
+            love.graphics.setColor(0,0,0.85,0.75)
         else
-            love.graphics.setColor(200,200,200,192)
+            love.graphics.setColor(0.85,0.85,0.85,0.75)
         end
         love.graphics.rectangle('fill', 110, -1, 6, 6)
     love.graphics.pop()
@@ -1221,7 +1221,7 @@ end
 
 local function renderDebug()
     love.graphics.setFont(gfx.fonts.normal)
-    love.graphics.setColor(255,255,255)
+    love.graphics.setColor(1,1,1)
     local d = distanceToPlayer({x=0,y=0})
     local zone = zoneFromDistance(d)
 
@@ -1243,13 +1243,13 @@ local function printCenteredText(text, font, y)
 end
 
 local function renderPause()
-    love.graphics.setColor(255,255,255,255)
+    love.graphics.setColor(1,1,1,1)
     printCenteredText("Paused", 'big', sh/2 + 60)
     printCenteredText("Press any key to resume", 'normal', sh/2 + 80)
 end
 
 local function renderQuitConfirmation()
-    love.graphics.setColor(255,255,255,255)
+    love.graphics.setColor(1,1,1,1)
     printCenteredText("Quit? Y/N", 'big', sh/2 + 60)
     printCenteredText("(Press R to restart)", 'normal', sh/2 + 80)
 end
@@ -1259,7 +1259,7 @@ local function renderDead()
         player.deadTime = player.deadTime - 1
     end
 
-    love.graphics.setColor(255,255,255,255*(120-player.deadTime)/120)
+    love.graphics.setColor(1,1,1,(120-player.deadTime)/120)
     printCenteredText("You died :(", 'big', sh/2 - 20)
 
     if player.deadTime <= 0 then
@@ -1292,11 +1292,11 @@ local function renderIntro()
         love.graphics.print(text, (sw-w)/2, y)
     end
 
-    local color1 = { 255,255,255,192 }
+    local color1 = { 1,1,1,0.75 }
     doText('PINCERS', 'huge', sh/4, color1, 0, 800)
     doText('made by Gustavo Giráldez', 'big', sh/4+30, color1, 0.75*fadeTime, 800)
 
-    local color2 = { 255,255,255,128 }
+    local color2 = { 1,1,1,0.5 }
     doText('for the Ludum Dare 24 compo', 'normal', sh/2+90, color2, 2*fadeTime, 800)
     doText('August 2012', 'normal', sh/2+110, color2, 2.75*fadeTime, 800)
 
