@@ -5,9 +5,10 @@ game = {}
 
 -- module variables
 --
-local sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
-local screenSize = math.max(sw, sh)
-local farThreshold = 3 * screenSize
+local sw, sh
+local screenSize
+local scale = 1
+local farThreshold
 
 local debug = false
 local updateTime, updateAcc = 0, 0
@@ -19,7 +20,24 @@ local paused = false
 local introTime = 10000
 local xp_penalty = 0.5
 local max_seg_level = 6
-local near_dist = screenSize / 2
+local near_dist
+
+local function resize()
+  sw = love.graphics.getWidth()
+  sh = love.graphics.getHeight()
+  scale = 1
+  screenSize = math.max(sw, sh)
+  if screenSize > 1600 then
+    scale = 2
+    sw = sw / 2
+    sh = sh / 2
+    screenSize = screenSize / 2
+  end
+  farThreshold = 3 * screenSize
+  near_dist = screenSize / 2
+end
+
+resize()
 
 -- forward declarations
 --
@@ -61,7 +79,7 @@ local shelters = {
 }
 
 
--- 
+--
 -- Zones
 --
 
@@ -164,7 +182,7 @@ end
 
 local function createItem(x, y, itype)
     return {
-        x=x, y=y, itype=itype, 
+        x=x, y=y, itype=itype,
         angle=math.random()*2*math.pi,
         spin=(math.random()-0.5)*math.pi/50,
         v=math.random()*.2,
@@ -250,15 +268,15 @@ local function createCritter(x, y, stype)
         life = 0,               -- current life
         hurt_time = 0,          -- timer when the critter takes damage
         last_attacker = nil,
-        
+
         max_energy = 10,        -- total energy
         energy = 10,            -- current energy
-        
+
         attack = 0,             -- attack strength
         attack_cooldown = 0,    -- must wait to attack again
-        
+
         dead = false,           -- is it dead yet?
-        
+
         size = 0,               -- total size (sum of all segments * 2)
         color = { 255, 255, 255 },
 
@@ -273,7 +291,7 @@ local function createCritter(x, y, stype)
         },
 
         -- segments
-        segs = {{ 
+        segs = {{
             x=x, y=y,                       -- position
             angle=angle,                    -- angle
             stype=stype,                    -- type
@@ -290,7 +308,7 @@ local function updateStats(c)
     local cl, cs, ca = 0,0,0
     local max_life, max_energy, attack, friction, max_speed = 0,0,0,0,0
     local total_size = 0
-    
+
     max_life = #(c.segs)
     max_energy = #(c.segs)
     friction = 2
@@ -309,7 +327,7 @@ local function updateStats(c)
             s = s + seg.level
             cs = cs + 1
             friction = friction + seg.level
-        
+
         elseif seg.stype == 'attack' then
             a = a + seg.level
             ca = ca + 1
@@ -341,9 +359,9 @@ local function updateStats(c)
     c.friction = friction / 100
 
     local total = l + s + a
-    c.color = { 
+    c.color = {
         math.min(255, 80*l/total+192),
-        math.min(255, 80*s/total+192), 
+        math.min(255, 80*s/total+192),
         math.min(255, 80*a/total+192)
     }
 end
@@ -372,7 +390,7 @@ end
 local function updateSegments(c)
     -- update segment positions
     local ss = c.segs
-    
+
     -- first segment
     ss[1].x = c.x
     ss[1].y = c.y
@@ -614,7 +632,7 @@ local function checkCritterAttack(attacker, defender)
     local ar = attacker.segs[1].size    -- head
     local dss = defender.segs
     local hit = false
-    
+
     -- check each of the defender segments
     for i = 1, #dss do
         local ds = dss[i]
@@ -655,7 +673,7 @@ local function checkItemsCollisions(c)
             table.insert(c.nearby[it.itype], it)
         end
     end
-    
+
     -- check collisions against segment items
     for j = 1, #segments do
         local s = segments[j]
@@ -671,7 +689,7 @@ end
 local function checkCollisions(c)
     local d2
     local head_size2 = c.segs[1].size * c.segs[1].size
-    
+
     -- against the player and other critters
     if c.segs[1].stype == 'attack' and c.attack_cooldown <= 0 then
         d2 = distance2(c, player)
@@ -693,7 +711,7 @@ local function checkCollisions(c)
             end
         end
     end
-    
+
     checkItemsCollisions(c)
 end
 
@@ -703,7 +721,7 @@ end
 
 --
 -- Player code
--- 
+--
 
 local function createPlayer()
     local player = createCritter(0, 0, 'attack')
@@ -722,11 +740,11 @@ local function processPlayerInput()
     if input.down then ay = ay + 1 end
     if input.left then ax = ax - 1 end
     if input.right then ax = ax + 1 end
-    
-    if love.mouse.isDown('l') then
+
+    if love.mouse.isDown(1) then
         local mx, my = love.mouse.getX(), love.mouse.getY()
-        ax = mx - sw/2
-        ay = my - sh/2
+        ax = mx/scale - sw/2
+        ay = my/scale - sh/2
         local m = math.sqrt(mx*mx + my*my)
         a = math.min(a, m/sw)
     end
@@ -773,19 +791,19 @@ local function checkPlayerCollisions()
             end
         end
     end
-    
+
     checkItemsCollisions(player)
 end
 
 
 --
 -- AI code
--- 
+--
 
 local function createRandomCritter(hidden)
     local x, y = randomCoordinates(hidden)
     local zone = zoneFromCoordinates(x, y)
-    
+
     local level = math.random(math.ceil(zone/2), zone)
     local stype
     if level == 1 then
@@ -886,7 +904,7 @@ function game.restart()
 
     -- create player critter
     player = createPlayer()
-    
+
     -- populate critters
     critters = {}
     for i = 1, 100 do
@@ -908,7 +926,7 @@ function game.tic()
 
     if not paused then
         globalTic = globalTic + 1
-    end  
+    end
     input.tic()
 
     if input.escape then
@@ -974,7 +992,7 @@ function game.update()
         processPlayerInput()
         updatePlayer()
     end
-    
+
     -- garbage collection
     if globalTic % 60 == 0 then
         local itemsCollected = 0
@@ -1208,11 +1226,11 @@ local function renderDebug()
     local zone = zoneFromDistance(d)
 
     local str
-    str = love.timer.getFPS() .. " fps, zone "..zone..", dist ".. math.ceil(d) .. 
+    str = love.timer.getFPS() .. " fps, zone "..zone..", dist ".. math.ceil(d) ..
           ", " .. #critters .. " critters, " .. #items .. " items, " .. #segments .. " segments"
     love.graphics.print(str, 0, 0)
 
-    str = "Update " .. updateTime .. 
+    str = "Update " .. updateTime ..
           " us, render " .. renderTime .. " ms"
     love.graphics.print(str, 0, 10)
 end
@@ -1291,6 +1309,9 @@ end
 function game.render()
     local start = love.timer.getTime()
 
+    resize()
+    love.graphics.scale(scale, scale)
+
     -- background color is a function of the distance of the player to the origin
     local d = math.sqrt(player.x*player.x + player.y*player.y)
     local v = d/5000
@@ -1306,7 +1327,7 @@ function game.render()
 
     love.graphics.push()
     love.graphics.translate(sw/2 - player.x, sh/2 - player.y)
-    
+
     renderBackground()
     renderShelters()
 
@@ -1343,7 +1364,7 @@ function game.render()
                 end
             end
         end
-        
+
         renderHUD()
         if player.dead then
             if player.hurt_time > 0 then
@@ -1365,4 +1386,3 @@ function game.render()
 end
 
 return game
-
